@@ -1,44 +1,43 @@
 #include <iostream>
-#include <vulkan/vulkan.h>
-#include <GLFW/glfw3.h>
+#include <cstdint>
+#include <raylib.h>
+#include <stdio.h>
+#include "ctx.h"
 
-#define WIDTH 800
-#define HEIGHT 600
+#define WIDTH 1280
+#define HEIGHT 720
 
-static VkInstance instance;
-static GLFWwindow *window;
+static std::uint8_t image_buf[WIDTH * HEIGHT * 3];
+
+void write_buf_to_file(std::uint8_t *buf, int width, int height)
+{
+	static int idx = 0;
+
+	const char *name = ("image" + std::to_string(idx++) + ".ppm").c_str();
+	FILE *image_file = fopen(name, "wb");
+	if(!image_file) {
+		throw std::runtime_error("failed to create image file");
+	}
+
+	fprintf(image_file, "P6\n%d %d\n255\n", WIDTH, HEIGHT);
+	fwrite(image_buf, 1, WIDTH * HEIGHT * 3, image_file);
+	fclose(image_file);
+}
 
 int main()
 {
-	//create window
-	if(!glfwInit()) {
-		throw std::runtime_error("window creation failed");
-	}
-	//glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	
-	window = glfwCreateWindow(WIDTH, HEIGHT, "Roach", NULL, NULL);
-	
-	VkApplicationInfo app_info = {};
-	app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	app_info.pApplicationName = "Roach";
-	app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-	app_info.pEngineName = "No Engine";
-	app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	app_info.apiVersion = VK_API_VERSION_1_0;
-	
-	VkInstanceCreateInfo instance_create_info = {};
-	instance_create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	instance_create_info.pApplicationInfo = &app_info;
-	vkCreateInstance(&instance_create_info, NULL, &instance);
-
-	glfwMakeContextCurrent(window);
-	while(!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
-		glfwSwapBuffers(window);
+	for(auto i = 0; i < WIDTH * HEIGHT * 3; i+=3) {
+		image_buf[i] = static_cast<std::uint8_t>(255);
+		image_buf[i+1] = static_cast<std::uint8_t>(0);
+		image_buf[i+2] = static_cast<std::uint8_t>(0);		
 	}
 
-	glfwDestroyWindow(window);
-	glfwTerminate();
+	write_buf_to_file(image_buf, WIDTH, HEIGHT);
+ 
+	Ctx ctx(WIDTH, HEIGHT, image_buf);
+	ctx.draw_rect(0, 0, 200, 200, 0x00FF00);
+	write_buf_to_file(image_buf, WIDTH, HEIGHT);
+	
 	return 0;
 }
+
