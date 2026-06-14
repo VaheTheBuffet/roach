@@ -24,20 +24,14 @@ void write_buf_to_file(std::uint8_t *buf, int width, int height)
 	fclose(image_file);
 }
 
+constexpr float sphere_position
+
 int main()
 {
-	for(auto i = 0; i < WIDTH * HEIGHT * 3; i+=3) {
-		image_buf[i] = static_cast<std::uint8_t>(255);
-		image_buf[i+1] = static_cast<std::uint8_t>(0);
-		image_buf[i+2] = static_cast<std::uint8_t>(0);		
-	}
+	sphere_p = point3(0, 0, -5);
+	sphere_r = 3;
 
-	write_buf_to_file(image_buf, WIDTH, HEIGHT);
- 
-	Ctx ctx(WIDTH, HEIGHT, image_buf);
-	ctx.draw_rect(0, 0, 200, 200, 0x00FF00);
-	write_buf_to_file(image_buf, WIDTH, HEIGHT);
 	
+
 	return 0;
 }
-
