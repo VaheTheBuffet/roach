@@ -31,10 +31,12 @@ struct sphere {
         float disc_squared = b*b - 4.0f*a*c;
 
         if (disc_squared < 0.0f) {
-            return 0;
+            return 0.0f;
         }
 
-        return (-b + (high ? std::sqrt(disc_squared) : - std::sqrt(disc_squared))) / (2.0f * a);
+        float disc = std::sqrt(disc_squared);
+
+        return (-b + (high ? disc : -disc) ) / (2.0f * a);
     }
 };
 #endif

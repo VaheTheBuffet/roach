@@ -85,9 +85,9 @@ void draw_frame(const state &state) {
                 }
 
                 color3 color;
-                color.e[0] = std::min(255.0f, color_factor * sphere.color.e[0]);
-                color.e[1] = std::min(255.0f, color_factor * sphere.color.e[1]);
-                color.e[2] = std::min(255.0f, color_factor * sphere.color.e[2]);
+                color.e[0] = std::min(1.0f, color_factor * sphere.color.e[0]);
+                color.e[1] = std::min(1.0f, color_factor * sphere.color.e[1]);
+                color.e[2] = std::min(1.0f, color_factor * sphere.color.e[2]);
 
                 int y_t = HEIGHT - y;
                 image_buf[3 * (x + y_t * WIDTH)] = color.r();
@@ -102,14 +102,15 @@ void draw_frame(const state &state) {
 
 void draw_scene_with_refraction() {
     sphere spheres[] = {
-        sphere{point3{0.0f, 0.0f, 8.0f}, 3.0f, color3::from_rgb(0xFF0000), material::diffuse},
-        sphere{point3{0.0f, 0.0f, 20.0f}, 10.0f, color3::from_rgb(0x00FF12), material::diffuse},
+        sphere{point3{0.0f, 0.0f, 8.0f}, 2.0f, color3::from_rgb(0xFF0000), material::transparent},
+        sphere{point3{8.2f, 0.0f, 20.0f}, 8.0f, color3::from_rgb(0x00FF12), material::diffuse},
+        sphere{point3{-8.2f, 0.0f, 20.0f}, 8.0f, color3::from_rgb(0x0012FF), material::diffuse},
     };
 
     for (auto y = 0; y < HEIGHT; ++y) {
         int y_t = HEIGHT - y - 1;
 
-        std::cout << "\r                     \r" 
+        std::cout << "\r                    \r" 
             << static_cast<float>(y) / HEIGHT;
         std::flush(std::cout);
 
@@ -143,27 +144,38 @@ void draw_scene_with_refraction() {
                 }
 
                 if (front_sphere->mat == material::diffuse) {
-                    look_ray.orig = min_factor * look_ray.dir;
+                    look_ray.orig += min_factor * look_ray.dir;
 
-                    vec3 normal = look_ray.orig - front_sphere->center;
+                    vec3 normal = (look_ray.orig - front_sphere->center) / front_sphere->r;
 
-                    look_ray.dir = vec3::random();
-                    if (dot(look_ray.dir, normal) < 0.0f) {
-                        look_ray.dir *= -1.0f;
-                    }
-
+                    look_ray.dir = vec3::malley_random(normal);
+                    assert(dot(look_ray.dir, normal) >= 0.0f);
                     color *= 0.5 * front_sphere->color;
-                } else if (front_sphere->mat == material::transparent) {
-                    look_ray.orig = min_factor * look_ray.dir;
 
-                    vec3 normal = look_ray.orig - front_sphere->center;
-                    vec3 inner_dir = refract(look_ray.dir, normal, 0.8f);
+                } else if (front_sphere->mat == material::transparent) {
+                    look_ray.orig += min_factor * look_ray.dir;
+
+                    vec3 normal = (look_ray.orig - front_sphere->center).normalize();
+                    vec3 inner_dir = refract(look_ray.dir, normal, 1.0f, 1.1f);
+
+                    assert(dot(inner_dir, look_ray.dir) > 0.0f);
+                    look_ray.dir = inner_dir;
 
                     float inner_factor = front_sphere->intersection_ray(look_ray, true);
 
-                    // shortcut for refraction out of the medium, the direction will be same as original incidence
-                    // thus we don't change look_ray.dir for exit point
-                    look_ray.orig = look_ray.orig + inner_dir * inner_factor;
+                    //TODO: there's a shortcut we can use for spherical refraction
+                    look_ray.orig += inner_dir * inner_factor;
+                    normal = (front_sphere->center - look_ray.orig).normalize();
+
+                    // make sure we're out of the sphere
+                    look_ray.orig -= 1e-3 * normal; 
+                    assert((look_ray.orig - front_sphere->center).length() > front_sphere->r);
+
+                    look_ray.dir.normalize();
+                    vec3 out_dir = refract(look_ray.dir, normal, 1.1f, 1.0f);
+
+                    assert(dot(out_dir, look_ray.dir) > 0.0f);
+                    look_ray.dir = out_dir;
                 }
             }
         }
@@ -182,9 +194,9 @@ int main() {
 
     state.light_sources[0] = point3{0, 10, 0};
 
-    state.spheres[0] = sphere{point3{0, 0, 5}, 1.1, color3{0xAA, 0x12, 0xD0}, material::diffuse};
-    state.spheres[1] = sphere{point3{-5, 0, 5}, 1.1, color3{0xAA, 0xBB, 0xCC}, material::diffuse};
-    state.spheres[2] = sphere{point3{5, 0, 5}, 1.1, color3{148, 49, 24}, material::diffuse};
+    state.spheres[0] = sphere{point3{0, 0, 5}, 1.1, color3::from_rgb(0xAA12D0), material::diffuse};
+    state.spheres[1] = sphere{point3{-5, 0, 5}, 1.1, color3::from_rgb(0xAABBCC), material::diffuse};
+    state.spheres[2] = sphere{point3{5, 0, 5}, 1.1, color3::from_rgb(0x943118), material::diffuse};
 
     auto start = std::chrono::high_resolution_clock::now();
     draw_frame(state);

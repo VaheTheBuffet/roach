@@ -1,10 +1,13 @@
 #ifndef VEC_H
 #define VEC_H
 
+#include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdlib>
 
 #include <cstdint>
+#include <raylib.h>
 
 inline bool almost_eq(const float &f1, const float &f2) {
     return std::abs(f1 - f2) < 0.0001;
@@ -16,13 +19,8 @@ struct vec3 {
     vec3() = default;
     constexpr vec3(float x, float y, float z) : e{x, y, z} {}
 
-    static vec3 random() {
-        float x = static_cast<float>(std::rand()) / RAND_MAX;
-        float y = static_cast<float>(std::rand()) / RAND_MAX;
-        float z = static_cast<float>(std::rand()) / RAND_MAX;
-
-        return vec3{x, y, z}.normalize();
-    }
+    static vec3 random();
+    static vec3 malley_random(const vec3 &n);
 
     constexpr static vec3 from_rgb(uint32_t color) {
         float b = (color & 0xFF) / 255.0f;
@@ -38,7 +36,7 @@ struct vec3 {
     std::uint8_t g() const {
         return this->y() * 0xFF;
     }
-    
+
     std::uint8_t b() const {
         return this->z() * 0xFF;
     }
@@ -122,7 +120,11 @@ inline vec3 operator*(float c, const vec3 &v) {
 }
 
 inline vec3 operator*(const vec3 &v1, const vec3 &v2) {
-    return vec3{v1.x() * v2.x(), v1.y() * v2.y(), v1.z() * v2.z()};
+    return vec3{v1.e[0] * v2.e[0], v1.e[1] * v2.e[1], v1.e[2] * v2.e[2]};
+}
+
+inline vec3 operator/(const vec3 &v, const float c) {
+  return v * (1.0 / c);
 }
 
 inline vec3 operator-(const vec3 &v1, const vec3 &v2) {
@@ -150,18 +152,56 @@ inline bool operator!=(const vec3 &v1, const vec3 &v2) {
 
 inline vec3 reflect(const vec3 &incident, const vec3 &normal) {
     // normal has length 1
-    // normal has opposite direction to projection
+    assert(almost_eq(normal.length_squared(), 1.0f));
     return 2 * dot(incident, normal) * normal - incident;
 }
 
-inline vec3 refract(const vec3 &incident, const vec3 &normal, float snells_factor) {
-    // normal has length 1
-    float cos_theta_i = dot(incident, normal);
-    float sin2_theta_r = snells_factor * snells_factor * (1 - cos_theta_i * cos_theta_i);
+inline vec3 refract(const vec3 &incident, const vec3 &normal, float n1, float n2) {
+    // all vectors must be normalized
+    // outward facing normal
+    assert(almost_eq(incident.length_squared(), 1.0f));
+    assert(almost_eq(normal.length(), 1.0f));
+
+    float n1_n2 = n1 / n2;
+
+    float cos_theta_i = std::max(-dot(incident, normal), 0.0f);
+
+    float sin2_theta_r = std::min(n1_n2 * n1_n2 * (1.0f - cos_theta_i * cos_theta_i), 1.0f);
+
     float sin_theta_r = std::sqrt(sin2_theta_r);
 
-    return incident * snells_factor * sin_theta_r
-        + incident * (std::sqrt(1.0 - snells_factor * snells_factor * sin2_theta_r) - snells_factor * sin_theta_r);
+    return incident * n1_n2 + normal * (n1_n2 * cos_theta_i - std::sqrt(1 - sin2_theta_r));
+}
+
+// all components chosen unifornly
+inline vec3 vec3::random() {
+  float x = static_cast<float>(std::rand()) / RAND_MAX;
+  float y = static_cast<float>(std::rand()) / RAND_MAX;
+  float z = static_cast<float>(std::rand()) / RAND_MAX;
+
+  return vec3{x, y, z}.normalize();
+}
+
+// vector chosen from unit disk, then projected onto hemisphere
+// gives cosine weighted pdf, useful for some calculations
+// pde is cos(theta) / PI
+inline vec3 vec3::malley_random(const vec3& n) {
+  float r = std::sqrt(static_cast<float>(std::rand()) / RAND_MAX);
+  float theta = 2 * PI * static_cast<float>(std::rand()) / RAND_MAX;
+
+  // branchless orthonormal basis algorithm
+  // relies on reflections which are orthogonal transformations
+  float sign = std::copysign(1.0f, n.z());
+  float a = -1.0f / (sign + n.z());
+  float b = n.x() * n.y() * a;
+  vec3 b1 = vec3(1.0f + sign * n.x() * n.x() * a, sign * b, -sign * n.x());
+  vec3 b2 = vec3(b, sign + n.y() * n.y() * a, -n.y());
+  
+  float x = r * std::cos(theta);
+  float y = r * std::sin(theta);
+  float z = std::sqrt(std::max(0.0f, 1.0f - x*x -y*y));
+
+  return x * b1 + y * b2 + z * n;
 }
 
 using point3 = vec3;
