@@ -30,14 +30,17 @@ struct vec3 {
     }
 
     std::uint8_t r() const {
+        assert(this->x() >= 0.0f && this->x() <= 1.0f);
         return this->x() * 0xFF;
     }
 
     std::uint8_t g() const {
+        assert(this->y() >= 0.0f && this->y() <= 1.0f);
         return this->y() * 0xFF;
     }
 
     std::uint8_t b() const {
+        assert(this->z() >= 0.0f && this->z() <= 1.0f);
         return this->z() * 0xFF;
     }
 
@@ -153,7 +156,7 @@ inline bool operator!=(const vec3 &v1, const vec3 &v2) {
 inline vec3 reflect(const vec3 &incident, const vec3 &normal) {
     // normal has length 1
     assert(almost_eq(normal.length_squared(), 1.0f));
-    return 2 * dot(incident, normal) * normal - incident;
+    return incident - 2.0f * dot(incident, normal) * normal;
 }
 
 inline vec3 refract(const vec3 &incident, const vec3 &normal, float n1, float n2) {
@@ -196,7 +199,7 @@ inline vec3 vec3::malley_random(const vec3& n) {
   float b = n.x() * n.y() * a;
   vec3 b1 = vec3(1.0f + sign * n.x() * n.x() * a, sign * b, -sign * n.x());
   vec3 b2 = vec3(b, sign + n.y() * n.y() * a, -n.y());
-  
+
   float x = r * std::cos(theta);
   float y = r * std::sin(theta);
   float z = std::sqrt(std::max(0.0f, 1.0f - x*x -y*y));
