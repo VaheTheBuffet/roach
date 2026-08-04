@@ -163,17 +163,14 @@ inline vec3 refract(const vec3 &incident, const vec3 &normal, float n1, float n2
     // all vectors must be normalized
     // outward facing normal
     assert(almost_eq(incident.length_squared(), 1.0f));
-    assert(almost_eq(normal.length(), 1.0f));
+    assert(almost_eq(normal.length_squared(), 1.0f));
 
     float n1_n2 = n1 / n2;
-
-    float cos_theta_i = std::max(-dot(incident, normal), 0.0f);
-
+    float cos_theta_i = -dot(incident, normal);
     float sin2_theta_r = std::min(n1_n2 * n1_n2 * (1.0f - cos_theta_i * cos_theta_i), 1.0f);
+   float sin_theta_r = std::sqrt(sin2_theta_r);
 
-    float sin_theta_r = std::sqrt(sin2_theta_r);
-
-    return incident * n1_n2 + normal * (n1_n2 * cos_theta_i - std::sqrt(1 - sin2_theta_r));
+    return incident * n1_n2 + normal * (n1_n2 * cos_theta_i - std::sqrt(1.0f - sin2_theta_r));
 }
 
 // all components chosen unifornly

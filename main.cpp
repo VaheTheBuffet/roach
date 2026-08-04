@@ -1,6 +1,4 @@
 #include <algorithm>
-#include <cfloat>
-#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <ostream>
@@ -106,6 +104,7 @@ void draw_frame(const state &state) {
 }
 
 void draw_scene_with_refraction() {
+    // volumes
     sphere spheres[] = {
         sphere{point3{0.0f, 0.0f, 8.0f}, 2.0f, color3::from_rgb(0x00FF00), material::transparent},
         sphere{point3{0.2f, 0.0f, 20.0f}, 8.0f, color3::from_rgb(0x0000FF), material::diffuse},
@@ -113,15 +112,20 @@ void draw_scene_with_refraction() {
         //sphere{point3{-8.2f, 0.0f, 20.0f}, 8.0f, color3::from_rgb(0x0012FF), material::diffuse},
     };
 
-    ray ray_stack[STACK_SIZE * static_cast<int>(material::LENGTH)]{};
-    ray staging_buffer[STACK_SIZE]{};
+    // material data
+    float n1 = 1.2f;
+    float n2 = 1.0f;
+    float r_2 = (n2 - 1.0f) / (n2 + 1.0f);
+    r_2 *= r_2;
+    float r_1 = (n1 - 1.0f) / (n1 + 1.0f);
+    r_1 *= r_1;
 
-    color3 color_samples[STACK_SIZE * static_cast<int>(material::LENGTH)]{};
-    int path_depths[STACK_SIZE * static_cast<int>(material::LENGTH)]{};
-
+    // path state
+    ray rays[STACK_SIZE]{};
+    color3 colors[STACK_SIZE]{};
+    int depths[STACK_SIZE]{};
+    int bounding_volumes[STACK_SIZE]{};
     size_t stack_top = 0;
-
-    float r_0 = 0.05f;
 
     for (auto y = 0; y < HEIGHT; ++y) {
         int y_t = HEIGHT - y - 1;
@@ -131,125 +135,141 @@ void draw_scene_with_refraction() {
         std::flush(std::cout);
 
         for (auto x = 0; x < WIDTH; ++x) {
-
             color3 global_color{};
 
             float px = VIEWPORT_WIDTH * (static_cast<float>(x) / WIDTH - 0.5f);
             float py = VIEWPORT_HEIGHT * (static_cast<float>(y) / HEIGHT - 0.5f);
 
-            ray_stack[stack_top] = ray{point3{0.0f, 0.0f, 0.0f}, vec3{px, py, NEAR}.normalize()};
-            color_samples[stack_top] = color3{1.0f, 1.0f, 1.0f};
-            path_depths[stack_top++] = 1;
+            rays[stack_top] = ray{point3{0.0f, 0.0f, 0.0f}, vec3{px, py, NEAR}.normalize()};
+            colors[stack_top] = color3{1.0f, 1.0f, 1.0f};
+            bounding_volumes[stack_top] = -1;
+            depths[stack_top++] = 1;
+
+            // TODO: impelment a dynamic bounding volume hierarchy per path or
+            // calculate both high and low root in case we are inside, maintain as state or
+            // compute bounding volumte hierarchy from arbitrary volume data or
+            // enforce bounding volume hierarchy as input
 
             while (stack_top > 0) {
-                float min_factor = 1000;
-                int min_index = 1000;
-                const sphere *front_sphere = NULL;
+                assert(stack_top <= STACK_SIZE);
 
-                assert(stack_top > 0 && stack_top <= STACK_SIZE);
+                int path = stack_top - 1;
 
-                ray &look_ray = ray_stack[stack_top-1];
-                color3 &ray_color = color_samples[stack_top-1];
-                int &depth = path_depths[stack_top-1];
+                int front_sphere = bounding_volumes[path];
+                float min_factor = spheres[front_sphere].intersection_ray(rays[path], true);
 
                 for (auto i = 0; i < sizeof(spheres) / sizeof(sphere); ++i) {
                     // basic ternary for condition c is a * c + b * (1 - c)
                     // since we will need to compute a - b anyway, we will represent as c * (a - b) + b
                     // we use the sign bit as the condition
-                    float ray_factor = spheres[i].intersection_ray(look_ray);
+                    float ray_factor = spheres[i].intersection_ray(rays[path]);
                     float diff = ray_factor - min_factor;
                     bool new_min = diff < 0 && ray_factor > 0;
 
                     min_factor += new_min * diff;
-                    min_index += new_min * (i - min_index);
+                    front_sphere += new_min * (i - front_sphere);
 
                     assert(min_factor != 0);
                 }
 
-                front_sphere = min_index < 1000 ? &spheres[min_index] : NULL;
+                //int target_depth = 4;
+                //if (depth == target_depth) {
+                //    stack_top--;
+                //    global_color += ray_color * background_color;
+                //    continue;
+                //} else if (!front_sphere) {
+                //    --stack_top;
+                //    continue;
+                //} else if (depth == 4) {
+                //    --stack_top;
+                //    continue;
+                //}
 
-                if (!front_sphere) {
-                    ray_color *= background_color;
-                    global_color += ray_color;
+                if (front_sphere == -1) {
+                    colors[path] *= background_color;
+                    global_color += colors[path];
                     --stack_top;
 
                     continue;
-                } else if (depth == 4) {
+                } else if (depths[path] == 4) {
                     --stack_top;
-                    //global_color += ray_color;
+                    global_color += colors[path] * background_color * spheres[front_sphere].color;
                     continue;
                 }
 
-                assert(almost_eq(front_sphere->intersection_ray(look_ray), min_factor));
+                assert(almost_eq(spheres[front_sphere].intersection_ray(rays[path]), min_factor));
 
-                if (front_sphere->mat == material::diffuse) {
-                    look_ray.orig += min_factor * look_ray.dir;
-                    assert(almost_eq((look_ray.orig - front_sphere->center).length(), front_sphere->r));
+                if (spheres[front_sphere].mat == material::diffuse) {
+                    rays[path].orig += min_factor * rays[path].dir;
+                    assert(almost_eq((rays[path].orig - spheres[front_sphere].center).length(), spheres[front_sphere].r));
 
-                    vec3 normal = (look_ray.orig - front_sphere->center) / front_sphere->r;
+                    vec3 normal = (rays[path].orig - spheres[front_sphere].center) / spheres[front_sphere].r;
 
-                    look_ray.dir = vec3::malley_random(normal);
-                    assert(dot(look_ray.dir, normal) >= 0.0f);
-                    ray_color *= 0.2 * front_sphere->color;
+                    rays[path].dir = vec3::malley_random(normal);
+                    assert(dot(rays[path].dir, normal) >= 0.0f);
 
-                    ray_stack[stack_top] = look_ray;
-                    ray_stack[stack_top].dir = vec3::malley_random(normal);
-                    color_samples[stack_top] = 0.2 * front_sphere->color;
-                    path_depths[stack_top++] = ++depth;
+                    rays[stack_top] = rays[path];
+                    rays[stack_top].dir = vec3::malley_random(normal);
+                    colors[stack_top] = 0.3 * colors[path] * spheres[front_sphere].color;
+                    depths[stack_top++] = ++depths[path];
 
-                } else if (front_sphere->mat == material::transparent) {
-                    look_ray.orig += min_factor * look_ray.dir;
-                    assert(almost_eq((look_ray.orig - front_sphere->center).length(), front_sphere->r));
+                    colors[path] *= 0.3 * spheres[front_sphere].color;
 
-                    vec3 normal = (look_ray.orig - front_sphere->center).normalize();
+                } else if (spheres[front_sphere].mat == material::transparent) {
+                    rays[path].orig += min_factor * rays[path].dir;
+                    assert(almost_eq((rays[path].orig - spheres[front_sphere].center).length(), spheres[front_sphere].r));
 
-                    look_ray.dir.normalize();
-                    vec3 f_refracted_dir = refract(look_ray.dir, normal, 1.0f, 1.5f).normalize();
-                    vec3 f_reflected_dir = reflect(look_ray.dir, normal).normalize();
+                    vec3 normal = (rays[path].orig - spheres[front_sphere].center).normalize();
 
-                    float f_cos_theta = -dot(look_ray.dir, normal);
+                    rays[path].dir.normalize();
+                    vec3 f_refracted_dir = refract(rays[path].dir, normal, n1, n2).normalize();
+                    vec3 f_reflected_dir = reflect(rays[path].dir, normal).normalize();
+
+                    float f_cos_theta = -dot(rays[path].dir, normal);
                     assert(f_cos_theta > 0.0f);
 
-                    float f_schlick = r_0 + (1.0f-r_0) * std::pow(1.0f - f_cos_theta, 5);
-                    assert(f_schlick < 1.0f && f_schlick > 0.0f);
+                    float f_schlick = r_2 + (1.0f-r_2) * std::pow(1.0f - f_cos_theta, 5);
+                    f_schlick = std::clamp(f_schlick, 0.0f, 1.0f);
+                    assert(f_schlick <= 1.0f && f_schlick >= 0.0f);
 
-                    ray_stack[stack_top].dir = f_reflected_dir;
-                    ray_stack[stack_top].orig = look_ray.orig;
-                    color_samples[stack_top] = ray_color * color3{f_schlick, f_schlick, f_schlick};
-                    path_depths[stack_top++] = ++depth;
+                    rays[stack_top].dir = f_reflected_dir;
+                    rays[stack_top].orig = rays[path].orig;
+                    colors[stack_top] = colors[path] * color3{f_schlick, f_schlick, f_schlick};
+                    depths[stack_top++] = depths[path] + 1;
 
-                    look_ray.dir = f_refracted_dir;
-                    ray_color *= 1.0f - f_schlick;
+                    rays[path].dir = f_refracted_dir;
+                    colors[path] *= 1.0f - f_schlick;
                     // we always seek the high root of the quadratic,
                     // because we are going from entry point through the interior of the sphere for this entire loop
-                    float inner_factor = front_sphere->intersection_ray(look_ray, true);
-                    look_ray.orig += f_refracted_dir * inner_factor;
-                    assert(almost_eq((look_ray.orig - front_sphere->center).length(), front_sphere->r));
+                    float inner_factor = spheres[front_sphere].intersection_ray(rays[path], true);
+                    rays[path].orig += f_refracted_dir * inner_factor;
+                    assert(almost_eq((rays[path].orig - spheres[front_sphere].center).length(), spheres[front_sphere].r));
 
                     // handle inside ray and push every outside ray to stack
-                    for (auto d = depth; d < 4 ; ++d) {
-                        normal = (front_sphere->center - look_ray.orig).normalize();
+                    for (auto d = depths[path]; d < 4; ++d) {
+                        normal = (spheres[front_sphere].center - rays[path].orig).normalize();
 
-                        vec3 b_refracted_dir = refract(look_ray.dir, normal, 1.5f, 1.0f).normalize();
-                        vec3 b_reflected_dir = reflect(look_ray.dir, normal).normalize();
+                        vec3 b_refracted_dir = refract(rays[path].dir, normal, n2, n1).normalize();
+                        vec3 b_reflected_dir = reflect(rays[path].dir, normal).normalize();
 
-                        float b_cos_theta = -dot(look_ray.dir, normal);
-                        float b_schlick = r_0 + (1.0f-r_0) * std::pow(1-b_cos_theta, 5);
+                        float b_cos_theta = -dot(rays[path].dir, normal);
+                        float b_schlick = r_1 + (1.0f-r_1) * std::pow(1.0f-b_cos_theta, 5);
+                        b_schlick = std::clamp(b_schlick, 0.0f, 1.0f);
 
-                        assert(b_schlick < 1.0f && b_schlick > 0.0f);
+                        assert(b_schlick <= 1.0f && b_schlick >= 0.0f);
 
-                        ray_stack[stack_top].dir = b_refracted_dir;
+                        rays[stack_top].dir = b_refracted_dir;
                         // make sure outside ray is really outside
-                        ray_stack[stack_top].orig = look_ray.orig - normal * 1e-5f;
-                        color_samples[stack_top] = ray_color * color3{1.0f-b_schlick, 1.0f-b_schlick, 1.0f-b_schlick};
-                        path_depths[stack_top++] = d+1;
-                        depth = d+1;
+                        rays[stack_top].orig = rays[path].orig - normal * 1e-5f;
+                        colors[stack_top] = colors[path] * color3{1.0f-b_schlick, 1.0f-b_schlick, 1.0f-b_schlick};
+                        depths[stack_top++] = d;
+                        depths[path] = d+1;
 
                         // continue along the reflected ray because it stays inside sphere
-                        look_ray.dir = b_reflected_dir;
-                        inner_factor = front_sphere->intersection_ray(look_ray, true);
-                        look_ray.orig += look_ray.dir * inner_factor;
-                        ray_color *= b_schlick;
+                        rays[path].dir = b_reflected_dir;
+                        inner_factor = spheres[front_sphere].intersection_ray(rays[path], true);
+                        rays[path].orig += rays[path].dir * inner_factor;
+                        colors[path] *= b_schlick;
                     }
                 }
             }
