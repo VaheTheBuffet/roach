@@ -56,7 +56,9 @@ void write_buf_to_file(std::uint8_t *buf, int width, int height) {
 
 struct state {
     sphere spheres[10] = {};
+    int n_spheres;
     point3 light_sources[10] = {};
+    int n_light_sources;
 };
 
 void draw_frame(const state &state) {
@@ -67,16 +69,22 @@ void draw_frame(const state &state) {
             float py = VIEWPORT_HEIGHT * (static_cast<float>(y) / HEIGHT - 0.5);
             ray look_ray{{0.0f, 0.0f, 0.0f}, {px, py, NEAR}};
 
-            for (auto &sphere: state.spheres) {
-                float factor = sphere.intersection_ray(look_ray);
+            if ( x == WIDTH / 2 && y == HEIGHT / 2) {
+                int br = 123;
+            }
 
-                if (factor == 0) {
+            for (int i = 0; i < state.n_spheres; ++i) {
+                const sphere &sphere = state.spheres[i];
+                float factor = sphere.intersection_ray(look_ray).low;
+
+                if (factor <= 0) {
                     continue;
                 }
 
                 point3 intersection = look_ray.dir * factor;
                 float color_factor = 0.4;
-                for (auto &ls : state.light_sources) {
+                for (int j = 0; j < state.n_light_sources; ++j) {
+                    const point3 &ls = state.light_sources[j];
                     if (ls == point3{0, 0, 0}) {
                         continue;
                     }
@@ -88,11 +96,11 @@ void draw_frame(const state &state) {
                 }
 
                 color3 color;
-                color.e[0] = std::min(1.0f, color_factor * sphere.color.e[0]);
-                color.e[1] = std::min(1.0f, color_factor * sphere.color.e[1]);
-                color.e[2] = std::min(1.0f, color_factor * sphere.color.e[2]);
+                color.e[0] = std::min(1.0f, color_factor * sphere.mat.albedo.e[0]);
+                color.e[1] = std::min(1.0f, color_factor * sphere.mat.albedo.e[1]);
+                color.e[2] = std::min(1.0f, color_factor * sphere.mat.albedo.e[2]);
 
-                int y_t = HEIGHT - y;
+                int y_t = HEIGHT - y - 1;
                 image_buf[3 * (x + y_t * WIDTH)] = color.r();
                 image_buf[1 + 3 * (x + y_t * WIDTH)] = color.g();
                 image_buf[2 + 3 * (x + y_t * WIDTH)] = color.b();
@@ -106,33 +114,25 @@ void draw_frame(const state &state) {
 void draw_scene_with_refraction() {
     // volumes
     sphere spheres[] = {
-        sphere{point3{0.0f, 0.0f, 8.0f}, 2.0f, color3::from_rgb(0x00FF00), material::transparent},
-        sphere{point3{0.2f, 0.0f, 20.0f}, 8.0f, color3::from_rgb(0x0000FF), material::diffuse},
-        sphere{point3{4.1f, 0.0f, 8.0f}, 2.0f, color3::from_rgb(0xFF0000), material::diffuse},
+        sphere{point3{0.0f, 0.0f, 8.0f}, 2.0f, material::refractive(1.0f / 1.33f)},
+        sphere{point3{0.0f, 0.0f, 8.0f}, 1.8f, material::refractive(1.33f)},
+        sphere{point3{0.0f, 0.0f, 20.0f}, 8.0f, material::lambertian(color3::from_rgb(0x0000A0))},
+        sphere{point3{4.1f, 0.0f, 8.0f}, 2.0f, material::lambertian(color3::from_rgb(0x00A000))},
         //sphere{point3{-8.2f, 0.0f, 20.0f}, 8.0f, color3::from_rgb(0x0012FF), material::diffuse},
     };
-
-    // material data
-    float n1 = 1.2f;
-    float n2 = 1.0f;
-    float r_2 = (n2 - 1.0f) / (n2 + 1.0f);
-    r_2 *= r_2;
-    float r_1 = (n1 - 1.0f) / (n1 + 1.0f);
-    r_1 *= r_1;
 
     // path state
     ray rays[STACK_SIZE]{};
     color3 colors[STACK_SIZE]{};
     int depths[STACK_SIZE]{};
-    int bounding_volumes[STACK_SIZE]{};
     size_t stack_top = 0;
 
     for (auto y = 0; y < HEIGHT; ++y) {
         int y_t = HEIGHT - y - 1;
 
         std::cout << "\r                    \r"
-                  << static_cast<float>(y) / HEIGHT;
-        std::flush(std::cout);
+                  << static_cast<float>(y) / HEIGHT
+                  << std::flush;
 
         for (auto x = 0; x < WIDTH; ++x) {
             color3 global_color{};
@@ -142,141 +142,143 @@ void draw_scene_with_refraction() {
 
             rays[stack_top] = ray{point3{0.0f, 0.0f, 0.0f}, vec3{px, py, NEAR}.normalize()};
             colors[stack_top] = color3{1.0f, 1.0f, 1.0f};
-            bounding_volumes[stack_top] = -1;
             depths[stack_top++] = 1;
 
-            // TODO: impelment a dynamic bounding volume hierarchy per path or
-            // calculate both high and low root in case we are inside, maintain as state or
-            // compute bounding volumte hierarchy from arbitrary volume data or
-            // enforce bounding volume hierarchy as input
+            bool front;
 
             while (stack_top > 0) {
                 assert(stack_top <= STACK_SIZE);
 
                 int path = stack_top - 1;
 
-                int front_sphere = bounding_volumes[path];
-                float min_factor = spheres[front_sphere].intersection_ray(rays[path], true);
+                int hit_sphere = -1;
+                float min_factor = 1000.0f;
 
                 for (auto i = 0; i < sizeof(spheres) / sizeof(sphere); ++i) {
                     // basic ternary for condition c is a * c + b * (1 - c)
                     // since we will need to compute a - b anyway, we will represent as c * (a - b) + b
                     // we use the sign bit as the condition
-                    float ray_factor = spheres[i].intersection_ray(rays[path]);
-                    float diff = ray_factor - min_factor;
-                    bool new_min = diff < 0 && ray_factor > 0;
+                    quadratic_solution intersection = spheres[i].intersection_ray(rays[path]);
+                    float diff = intersection.low - min_factor;
+                    bool new_min = diff < 0 && intersection.low > 0;
 
                     min_factor += new_min * diff;
-                    front_sphere += new_min * (i - front_sphere);
+                    hit_sphere += new_min * (i - hit_sphere);
+                    if (new_min) {
+                        front = true;
+                    }
 
-                    assert(min_factor != 0);
+                    diff = intersection.high - min_factor;
+                    new_min = diff < 0 && intersection.high > 0;
+
+                    min_factor += new_min * diff;
+                    hit_sphere += new_min * (i - hit_sphere);
+                    if (new_min) {
+                        front = false;
+                    }
                 }
 
-                //int target_depth = 4;
-                //if (depth == target_depth) {
-                //    stack_top--;
-                //    global_color += ray_color * background_color;
+                //int target_depth = 2;
+                //if (depths[path] == target_depth) {
+                //    --stack_top;
+                //    global_color += colors[path];
                 //    continue;
-                //} else if (!front_sphere) {
+                //} else if (hit_sphere == -1) {
                 //    --stack_top;
                 //    continue;
-                //} else if (depth == 4) {
+                //} else if (depths[path] == 4) {
                 //    --stack_top;
                 //    continue;
                 //}
 
-                if (front_sphere == -1) {
+                if (hit_sphere == -1) {
                     colors[path] *= background_color;
                     global_color += colors[path];
                     --stack_top;
-
                     continue;
                 } else if (depths[path] == 4) {
                     --stack_top;
-                    global_color += colors[path] * background_color * spheres[front_sphere].color;
+                    global_color += colors[path] * background_color * spheres[hit_sphere].mat.albedo;
                     continue;
                 }
 
-                assert(almost_eq(spheres[front_sphere].intersection_ray(rays[path]), min_factor));
+                switch (spheres[hit_sphere].mat.ty) {
+                    case material_type::lambertian: {
+                        rays[path].orig += min_factor * rays[path].dir;
+                        assert(almost_eq((rays[path].orig - spheres[hit_sphere].center).length(), spheres[hit_sphere].r));
 
-                if (spheres[front_sphere].mat == material::diffuse) {
-                    rays[path].orig += min_factor * rays[path].dir;
-                    assert(almost_eq((rays[path].orig - spheres[front_sphere].center).length(), spheres[front_sphere].r));
+                        vec3 normal = (rays[path].orig - spheres[hit_sphere].center) / spheres[hit_sphere].r;
 
-                    vec3 normal = (rays[path].orig - spheres[front_sphere].center) / spheres[front_sphere].r;
+                        rays[path].dir = vec3::malley_random(normal);
+                        assert(dot(rays[path].dir, normal) >= 0.0f);
 
-                    rays[path].dir = vec3::malley_random(normal);
-                    assert(dot(rays[path].dir, normal) >= 0.0f);
+                        rays[stack_top] = rays[path];
+                        rays[stack_top].dir = vec3::malley_random(normal);
+                        colors[stack_top] = 0.5f * colors[path] * spheres[hit_sphere].mat.albedo;
+                        depths[stack_top++] = ++depths[path];
 
-                    rays[stack_top] = rays[path];
-                    rays[stack_top].dir = vec3::malley_random(normal);
-                    colors[stack_top] = 0.3 * colors[path] * spheres[front_sphere].color;
-                    depths[stack_top++] = ++depths[path];
+                        colors[path] *= 0.5f * spheres[hit_sphere].mat.albedo;
 
-                    colors[path] *= 0.3 * spheres[front_sphere].color;
+                        break;
+                    }
 
-                } else if (spheres[front_sphere].mat == material::transparent) {
-                    rays[path].orig += min_factor * rays[path].dir;
-                    assert(almost_eq((rays[path].orig - spheres[front_sphere].center).length(), spheres[front_sphere].r));
+                    case material_type::refractive: {
+                        float orientation = 2 * front - 1;
 
-                    vec3 normal = (rays[path].orig - spheres[front_sphere].center).normalize();
+                        rays[path].orig += min_factor * rays[path].dir;
+                        rays[path].orig += 0.0001 * rays[path].dir.normalize(); // this vector has to be normalized at some point
+                        //assert(almost_eq((rays[path].orig - spheres[hit_sphere].center).length(), spheres[hit_sphere].r));
 
-                    rays[path].dir.normalize();
-                    vec3 f_refracted_dir = refract(rays[path].dir, normal, n1, n2).normalize();
-                    vec3 f_reflected_dir = reflect(rays[path].dir, normal).normalize();
+                        float ior = std::pow(spheres[hit_sphere].mat.refractive_index, orientation);
+                        float r0 = spheres[hit_sphere].mat.reflectance;
 
-                    float f_cos_theta = -dot(rays[path].dir, normal);
-                    assert(f_cos_theta > 0.0f);
+                        vec3 normal = orientation * (rays[path].orig - spheres[hit_sphere].center).normalize();
 
-                    float f_schlick = r_2 + (1.0f-r_2) * std::pow(1.0f - f_cos_theta, 5);
-                    f_schlick = std::clamp(f_schlick, 0.0f, 1.0f);
-                    assert(f_schlick <= 1.0f && f_schlick >= 0.0f);
+                        vec3 refracted_dir = refract(rays[path].dir, normal, ior).normalize();
+                        vec3 reflected_dir = reflect(rays[path].dir, normal).normalize();
 
-                    rays[stack_top].dir = f_reflected_dir;
-                    rays[stack_top].orig = rays[path].orig;
-                    colors[stack_top] = colors[path] * color3{f_schlick, f_schlick, f_schlick};
-                    depths[stack_top++] = depths[path] + 1;
+                        float cos = -dot(rays[path].dir, normal);
+                        assert(cos > 0.0f);
+                        cos = std::clamp(cos, 0.0f, 1.0f);
 
-                    rays[path].dir = f_refracted_dir;
-                    colors[path] *= 1.0f - f_schlick;
-                    // we always seek the high root of the quadratic,
-                    // because we are going from entry point through the interior of the sphere for this entire loop
-                    float inner_factor = spheres[front_sphere].intersection_ray(rays[path], true);
-                    rays[path].orig += f_refracted_dir * inner_factor;
-                    assert(almost_eq((rays[path].orig - spheres[front_sphere].center).length(), spheres[front_sphere].r));
+                        float f_schlick = r0 + (1.0f-r0) * std::pow(1.0f - cos, 5);
+                        f_schlick = std::clamp(f_schlick, 0.0f, 1.0f);
+                        assert(f_schlick <= 1.0f && f_schlick >= 0.0f);
 
-                    // handle inside ray and push every outside ray to stack
-                    for (auto d = depths[path]; d < 4; ++d) {
-                        normal = (spheres[front_sphere].center - rays[path].orig).normalize();
+                        rays[stack_top].dir = reflected_dir;
+                        rays[stack_top].orig = rays[path].orig;
+                        colors[stack_top] = colors[path] * f_schlick;
+                        depths[stack_top++] = depths[path] + 1;
 
-                        vec3 b_refracted_dir = refract(rays[path].dir, normal, n2, n1).normalize();
-                        vec3 b_reflected_dir = reflect(rays[path].dir, normal).normalize();
+                        if (reflected_dir == refracted_dir) {
+                            ++depths[path];
+                        }
 
-                        float b_cos_theta = -dot(rays[path].dir, normal);
-                        float b_schlick = r_1 + (1.0f-r_1) * std::pow(1.0f-b_cos_theta, 5);
-                        b_schlick = std::clamp(b_schlick, 0.0f, 1.0f);
+                        rays[path].dir = refracted_dir;
+                        colors[path] *= 1.0f - f_schlick;
 
-                        assert(b_schlick <= 1.0f && b_schlick >= 0.0f);
+                        break;
+                    }
 
-                        rays[stack_top].dir = b_refracted_dir;
-                        // make sure outside ray is really outside
-                        rays[stack_top].orig = rays[path].orig - normal * 1e-5f;
-                        colors[stack_top] = colors[path] * color3{1.0f-b_schlick, 1.0f-b_schlick, 1.0f-b_schlick};
-                        depths[stack_top++] = d;
-                        depths[path] = d+1;
+                    case material_type::reflective: {
+                        rays[path].orig += min_factor * rays[path].dir;
+                        vec3 normal = (rays[path].orig - spheres[hit_sphere].center).normalize();
 
-                        // continue along the reflected ray because it stays inside sphere
-                        rays[path].dir = b_reflected_dir;
-                        inner_factor = spheres[front_sphere].intersection_ray(rays[path], true);
-                        rays[path].orig += rays[path].dir * inner_factor;
-                        colors[path] *= b_schlick;
+                        rays[path].dir = reflect(rays[path].dir, normal).normalize();
+                        ++depths[path];
+
+                        break;
+                    }
+
+                    default: {
+                        break;
                     }
                 }
             }
 
-            global_color.e[0] = std::min(global_color[0], 1.0f);
-            global_color.e[1] = std::min(global_color[1], 1.0f);
-            global_color.e[2] = std::min(global_color[2], 1.0f);
+            global_color.e[0] = std::sqrt(std::min(global_color[0], 1.0f));
+            global_color.e[1] = std::sqrt(std::min(global_color[1], 1.0f));
+            global_color.e[2] = std::sqrt(std::min(global_color[2], 1.0f));
 
             image_buf[3 * (x + y_t * WIDTH)] = global_color.r();
             image_buf[1 + 3 * (x + y_t * WIDTH)] = global_color.g();
@@ -297,9 +299,11 @@ int main() {
 
     state.light_sources[0] = point3{0, 10, 0};
 
-    state.spheres[0] = sphere{point3{0, 0, 5}, 1.1, color3::from_rgb(0xAA12D0), material::diffuse};
-    state.spheres[1] = sphere{point3{-5, 0, 5}, 1.1, color3::from_rgb(0xAABBCC), material::diffuse};
-    state.spheres[2] = sphere{point3{5, 0, 5}, 1.1, color3::from_rgb(0x943118), material::diffuse};
+    state.spheres[0] = sphere{point3{0, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0xAA12D0))};
+    state.spheres[1] = sphere{point3{-5, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0xAABBCC))};
+    state.spheres[2] = sphere{point3{5, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0x943118))};
+    state.n_spheres = 3;
+    state.n_light_sources = 1;
 
     auto start = std::chrono::high_resolution_clock::now();
     draw_frame(state);

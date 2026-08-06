@@ -60,6 +60,13 @@ struct vec3 {
         return this->e[i];
     }
 
+    vec3 &operator+=(float f) {
+        this->e[0] += f;
+        this->e[1] += f;
+        this->e[2] += f;
+        return *this;
+    }
+
     vec3 &operator+=(const vec3 &other) {
         this->e[0] += other.e[0];
         this->e[1] += other.e[1];
@@ -85,15 +92,15 @@ struct vec3 {
         return vec3(-this->e[0], -this->e[1], -this->e[2]);
     }
 
-    vec3 &operator*=(float factor) {
-        this->e[0] *= factor;
-        this->e[1] *= factor;
-        this->e[2] *= factor;
+    vec3 &operator*=(float f) {
+        this->e[0] *= f;
+        this->e[1] *= f;
+        this->e[2] *= f;
         return *this;
     }
 
-    vec3 &operator/=(float factor) {
-        return *this *= 1 / factor;
+    vec3 &operator/=(float f) {
+        return *this *= 1 / f;
     }
 
     float length_squared() const {
@@ -109,6 +116,14 @@ struct vec3 {
         return *this;
     }
 };
+
+inline vec3 operator+(const vec3 &v, float f) {
+    return vec3(v.e[0] + f, v.e[1] + f, v.e[2] + f);
+}
+
+inline vec3 operator+(float f, const vec3 &v) {
+    return v + f;
+}
 
 inline vec3 operator+(const vec3 &v1, const vec3 &v2) {
     return vec3(v1.e[0] + v2.e[0], v1.e[1] + v2.e[1], v1.e[2] + v2.e[2]);
@@ -146,7 +161,7 @@ inline vec3 cross(const vec3 &v1, const vec3 &v2) {
 }
 
 inline bool operator==(const vec3 &v1, const vec3 &v2) {
-    return almost_eq(v1.e[0], v2.e[0]) && almost_eq(v1.e[1], v1.e[2]) && almost_eq(v1.e[2], v2.e[2]);
+    return almost_eq(v1.e[0], v2.e[0]) && almost_eq(v1.e[1], v1.e[1]) && almost_eq(v1.e[2], v2.e[2]);
 }
 
 inline bool operator!=(const vec3 &v1, const vec3 &v2) {
@@ -159,16 +174,21 @@ inline vec3 reflect(const vec3 &incident, const vec3 &normal) {
     return incident - 2.0f * dot(incident, normal) * normal;
 }
 
-inline vec3 refract(const vec3 &incident, const vec3 &normal, float n1, float n2) {
+inline vec3 refract(const vec3 &incident, const vec3 &normal, float n1_n2) {
     // all vectors must be normalized
     // outward facing normal
     assert(almost_eq(incident.length_squared(), 1.0f));
     assert(almost_eq(normal.length_squared(), 1.0f));
 
-    float n1_n2 = n1 / n2;
     float cos_theta_i = -dot(incident, normal);
-    float sin2_theta_r = std::min(n1_n2 * n1_n2 * (1.0f - cos_theta_i * cos_theta_i), 1.0f);
-   float sin_theta_r = std::sqrt(sin2_theta_r);
+    float sin2_theta_r = n1_n2 * n1_n2 * (1.0f - cos_theta_i * cos_theta_i);
+
+    if (sin2_theta_r > 1.0f) {
+        return reflect(incident, normal);
+    }
+
+    float sin_theta_r = std::sqrt(sin2_theta_r);
+
 
     return incident * n1_n2 + normal * (n1_n2 * cos_theta_i - std::sqrt(1.0f - sin2_theta_r));
 }
