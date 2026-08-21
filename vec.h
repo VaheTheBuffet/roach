@@ -174,7 +174,12 @@ inline vec3 reflect(const vec3 &incident, const vec3 &normal) {
     return incident - 2.0f * dot(incident, normal) * normal;
 }
 
-inline vec3 refract(const vec3 &incident, const vec3 &normal, float n1_n2) {
+struct refract_result {
+    vec3 v;
+    unsigned tir: 1;
+};
+
+inline refract_result refract(const vec3 &incident, const vec3 &normal, float n1_n2) {
     // all vectors must be normalized
     // outward facing normal
     assert(almost_eq(incident.length_squared(), 1.0f));
@@ -182,15 +187,10 @@ inline vec3 refract(const vec3 &incident, const vec3 &normal, float n1_n2) {
 
     float cos_theta_i = -dot(incident, normal);
     float sin2_theta_r = n1_n2 * n1_n2 * (1.0f - cos_theta_i * cos_theta_i);
+    bool tir = sin2_theta_r > 1.0f;
+    vec3 refracted = incident * n1_n2 + normal * (n1_n2 * cos_theta_i - std::sqrt(1.0f - sin2_theta_r));
 
-    if (sin2_theta_r > 1.0f) {
-        return reflect(incident, normal);
-    }
-
-    float sin_theta_r = std::sqrt(sin2_theta_r);
-
-
-    return incident * n1_n2 + normal * (n1_n2 * cos_theta_i - std::sqrt(1.0f - sin2_theta_r));
+    return refract_result {refracted, tir};
 }
 
 // all components chosen unifornly
