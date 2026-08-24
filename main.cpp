@@ -1,7 +1,6 @@
 #define NDEBUG
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <ostream>
 #include <pthread.h>
 #include <raylib.h>
@@ -17,8 +16,6 @@
 #include "vec.h"
 #include "util.h"
 #include "ctx.h"
-
-static std::uint8_t image_buf[WIDTH * HEIGHT * 3];
 
 void draw_scene_with_refraction_avx(Ctx &ctx) {
     // volumes
@@ -189,18 +186,17 @@ void draw_scene_with_refraction_avx(Ctx &ctx) {
                 global_color.e[1] = std::sqrt(std::min(global_color[1], 1.0f)) / N;
                 global_color.e[2] = std::sqrt(std::min(global_color[2], 1.0f)) / N;
 
-                image_buf[3 * (x + y_t * WIDTH)] += global_color.r();
-                image_buf[1 + 3 * (x + y_t * WIDTH)] += global_color.g();
-                image_buf[2 + 3 * (x + y_t * WIDTH)] += global_color.b();
+                ctx.buf[3 * (x + y_t * WIDTH)] += global_color.r();
+                ctx.buf[1 + 3 * (x + y_t * WIDTH)] += global_color.g();
+                ctx.buf[2 + 3 * (x + y_t * WIDTH)] += global_color.b();
             }
         }
 
         std::cout<<'\n';
     }
-    write_buf_to_file(image_buf, WIDTH, HEIGHT);
 }
 
-void draw_frame(const state &state) {
+void draw_frame(const state &state, Ctx &ctx) {
     for (auto x = 0; x < WIDTH; ++x) {
         for (auto y = 0; y < HEIGHT; ++y) {
             //calculate corresponding ray through the viewport
@@ -238,17 +234,15 @@ void draw_frame(const state &state) {
                 color.e[2] = std::min(1.0f, color_factor * sphere.mat.albedo.e[2]);
 
                 int y_t = HEIGHT - y - 1;
-                image_buf[3 * (x + y_t * WIDTH)] = color.r();
-                image_buf[1 + 3 * (x + y_t * WIDTH)] = color.g();
-                image_buf[2 + 3 * (x + y_t * WIDTH)] = color.b();
+                ctx.buf[3 * (x + y_t * WIDTH)] = color.r();
+                ctx.buf[1 + 3 * (x + y_t * WIDTH)] = color.g();
+                ctx.buf[2 + 3 * (x + y_t * WIDTH)] = color.b();
             }
         }
     }
-
-    write_buf_to_file(image_buf, WIDTH, HEIGHT);
 }
 
-void draw_scene_with_refraction() {
+void draw_scene_with_refraction(Ctx &ctx) {
     // volumes
     sphere spheres[] = {
         sphere{point3{0.0f, -2.0f, 8.0f}, 2.0f, material::refractive(1.0f / 1.33f)},
@@ -417,19 +411,18 @@ void draw_scene_with_refraction() {
                 global_color.e[1] = std::sqrt(std::min(global_color[1], 1.0f)) / N;
                 global_color.e[2] = std::sqrt(std::min(global_color[2], 1.0f)) / N;
 
-                image_buf[3 * (x + y_t * WIDTH)] += global_color.r();
-                image_buf[1 + 3 * (x + y_t * WIDTH)] += global_color.g();
-                image_buf[2 + 3 * (x + y_t * WIDTH)] += global_color.b();
+                ctx.buf[3 * (x + y_t * WIDTH)] += global_color.r();
+                ctx.buf[1 + 3 * (x + y_t * WIDTH)] += global_color.g();
+                ctx.buf[2 + 3 * (x + y_t * WIDTH)] += global_color.b();
             }
         }
 
         std::cout<<'\n';
     }
-    write_buf_to_file(image_buf, WIDTH, HEIGHT);
 }
 
-void clear_buffer() {
-    std::memset(image_buf, 0, sizeof(image_buf));
+void draw_frame_ctx(Ctx &ctx) {
+    ctx.draw_rect(0, 0, 300, 300, color3::from_rgb(0xFF0000));
 }
 
 int main() {
@@ -443,13 +436,32 @@ int main() {
     state.n_spheres = 3;
     state.n_light_sources = 1;
 
+    Ctx ctx(WIDTH, HEIGHT);
+    ctx.buf[HEIGHT * WIDTH - 1] = 0;
+
     auto start = std::chrono::high_resolution_clock::now();
-    draw_frame(state);
-    clear_buffer();
+    draw_frame(state, ctx);
+    ctx.clear();
+
     state.light_sources[0].e[0] += 5;
-    draw_frame(state);
-    clear_buffer();
-    draw_scene_with_refraction();
+    draw_frame(state, ctx);
+    write_buf_to_file(ctx.buf, WIDTH, HEIGHT);
+    ctx.clear();
+
+    draw_scene_with_refraction(ctx);
+    write_buf_to_file(ctx.buf, WIDTH, HEIGHT);
+    ctx.clear();
+
+    auto a = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < 1000; i++) {
+        draw_frame_ctx(ctx);
+    }
+    auto b = std::chrono::high_resolution_clock::now();
+    std::cout << "drawing square took " << std::chrono::duration<float, std::milli>{b - a}.count() / 1000 << "\n";
+
+    write_buf_to_file(ctx.buf, WIDTH, HEIGHT);
+    ctx.clear();
+
     auto end = std::chrono::high_resolution_clock::now();
     std::cout<<"elapsed time is " << std::chrono::duration<float, std::milli>{end - start}.count() << "\n";
 

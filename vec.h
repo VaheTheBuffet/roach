@@ -195,19 +195,19 @@ inline refract_result refract(const vec3 &incident, const vec3 &normal, float n1
 
 // all components chosen unifornly
 inline vec3 vec3::random() {
-  float x = static_cast<float>(std::rand()) / RAND_MAX;
-  float y = static_cast<float>(std::rand()) / RAND_MAX;
-  float z = static_cast<float>(std::rand()) / RAND_MAX;
+    float x = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    float y = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    float z = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
 
-  return vec3{x, y, z}.normalize();
+    return vec3{x, y, z}.normalize();
 }
 
 // vector chosen from unit disk, then projected onto hemisphere
 // gives cosine weighted pdf, useful for some calculations
 // pde is cos(theta) / PI
 inline vec3 vec3::malley_random(const vec3& n) {
-  float r = std::sqrt(static_cast<float>(std::rand()) / RAND_MAX);
-  float theta = 2 * PI * static_cast<float>(std::rand()) / RAND_MAX;
+  float r = std::sqrt(static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX));
+  float theta = 2 * PI * static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
 
   // branchless orthonormal basis algorithm
   // relies on reflections which are orthogonal transformations
