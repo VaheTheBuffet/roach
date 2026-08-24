@@ -1,3 +1,5 @@
+#include <immintrin.h>
+
 #include "ctx.h"
 
 #if defined(__AVX2__)

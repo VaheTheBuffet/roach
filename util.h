@@ -45,20 +45,6 @@ struct offset_table {
     }
 };
 
-static void write_buf_to_file(unsigned char *buf, int width, int height) {
-    static int idx = 0;
-
-    std::string name = "image" + std::to_string(idx++) + ".ppm";
-    FILE *image_file = fopen(name.c_str(), "wb");
-
-    if (!image_file) {
-        throw std::runtime_error("failed to create image file");
-    }
-
-    fprintf(image_file, "P6\n%d %d\n255\n", width, height);
-    fwrite(buf, 1, width * height * 3, image_file);
-    fclose(image_file);
-}
 
 constexpr float fast_tan(float x) {
     float x_3 = x * x * x;
