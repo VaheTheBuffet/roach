@@ -422,7 +422,7 @@ void draw_scene_with_refraction(Ctx &ctx) {
 }
 
 void draw_frame_ctx(Ctx &ctx) {
-    ctx.draw_rect(0, 0, 300, 300, color3::from_rgb(0xFF0000));
+    ctx.draw_rect(0, 0, 10, 400, color3::from_rgb(0xFF0000));
 }
 
 int main() {
