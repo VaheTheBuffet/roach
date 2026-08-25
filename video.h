@@ -19,13 +19,13 @@ extern float v_viewport_width;
 
 extern float v_viewport_height;
 
-void write_buf_to_file(unsigned char *buf, int width, int height);
-
 #else
 #define WIDTH 1280
 #define HEIGHT 720
 #define NEAR 0.1f
 #define FOV 90.f
 #endif
+
+void write_buf_to_file(unsigned char *buf, int width, int height);
 
 #endif

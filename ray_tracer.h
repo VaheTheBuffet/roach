@@ -10,15 +10,18 @@
 
 constexpr color3 background_color = color3::from_rgb(0x87CEEB);
 
-void draw_scene_with_refraction(Ctx &ctx);
-
 struct scene_t {
-    sphere spheres[10] = {};
+    sphere *spheres;
     int n_spheres;
-    point3 light_sources[10] = {};
+    point3 *light_sources;
     int n_light_sources;
 };
 
-void draw_frame(const scene_t &state, Ctx &ctx);
+void rt_init(Ctx &ctx);
+void rt_set_scene(scene_t &s);
+void rt_multisample_draw(int n);
+void rt_draw_frame2();
+// early prototype for reference
+void rt_draw_frame(const scene_t &state, Ctx &ctx);
 
 #endif

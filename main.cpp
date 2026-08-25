@@ -17,33 +17,40 @@ void draw_frame_ctx(Ctx &ctx) {
 }
 
 int main() {
+    point3 light_sources[] = {
+        point3{0, 10, 0}
+    };
+
+    sphere spheres[] = {
+        sphere{point3{0, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0xAA12D0))},
+        sphere{point3{-5, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0xAABBCC))},
+        sphere{point3{5, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0x943118))},
+    };
+
     scene_t state{};
-
-    state.light_sources[0] = point3{0, 10, 0};
-
-    state.spheres[0] = sphere{point3{0, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0xAA12D0))};
-    state.spheres[1] = sphere{point3{-5, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0xAABBCC))};
-    state.spheres[2] = sphere{point3{5, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0x943118))};
-    state.n_spheres = 3;
-    state.n_light_sources = 1;
+    state.light_sources = light_sources;
+    state.n_light_sources = sizeof(light_sources) / sizeof(light_sources[0]);
+    state.spheres = spheres;
+    state.n_spheres = sizeof(spheres) / sizeof(spheres[0]);
 
     Ctx ctx(v_width, v_height);
+    rt_init(ctx);
 
     auto start = std::chrono::high_resolution_clock::now();
     // draw scene 1
-    draw_frame(state, ctx);
+    rt_draw_frame(state, ctx);
     write_buf_to_file(ctx.buf, v_width, v_height);
     ctx.clear();
 
     // draw scene 2
     // move light
     state.light_sources[0].e[0] += 5;
-    draw_frame(state, ctx);
+    rt_draw_frame(state, ctx);
     write_buf_to_file(ctx.buf, v_width, v_height);
     ctx.clear();
 
     // draw scene 3
-    draw_scene_with_refraction(ctx);
+    rt_multisample_draw(16);
     write_buf_to_file(ctx.buf, v_width, v_height);
     ctx.clear();
 
