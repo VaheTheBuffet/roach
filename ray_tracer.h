@@ -18,10 +18,8 @@ struct scene_t {
 };
 
 void rt_init(Ctx &ctx);
-void rt_set_scene(scene_t &s);
-void rt_multisample_draw(int n);
-void rt_draw_frame2();
-// early prototype for reference
-void rt_draw_frame(const scene_t &state, Ctx &ctx);
+void rt_set_scene(const scene_t &s);
+void rt_multisample_draw(const scene_t &s, int n);
+void rt_draw_frame(const scene_t &scene);
 
 #endif

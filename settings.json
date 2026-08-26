@@ -1,0 +1,26 @@
+{
+    "spheres": [
+        {
+            "position": [0.0, -2.0, 8.0],
+            "radius": 2.0,
+            "material": "dielectric",
+            "ior": 1.33,
+            "width": 0.1
+        },
+        {
+            "position": [0.0, 0.0, 20.0],
+            "radius": 8.0,
+            "albedo": "0000A0"
+        },
+        {
+            "position": [4.1, -2.0, 8.0],
+            "radius": 2.0,
+            "albedo": "00A000"
+        },
+        {
+            "position": [0.0, -10008.0, 0.0],
+            "radius": 10000.0,
+            "albedo": "A0A0A0"
+        }
+    ]
+}

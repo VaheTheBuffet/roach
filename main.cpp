@@ -1,4 +1,6 @@
 //#define NDEBUG
+#include <cstdio>
+#include <cstdlib>
 #include <ostream>
 #include <pthread.h>
 #include <raylib.h>
@@ -12,45 +14,107 @@
 #include "ctx.h"
 #include "ray_tracer.h"
 
-void draw_frame_ctx(Ctx &ctx) {
-    ctx.draw_rect(0, 0, 10, 400, color3::from_rgb(0xFF0000));
+#include "cjson/cJSON.h"
+
+//object pool
+#define SPHERE_POOL_SIZE 30
+sphere sphere_pool[SPHERE_POOL_SIZE];
+scene_t scene;
+
+void parse_config() {
+    FILE* f = std::fopen("settings.json", "r");
+    if (!f) {
+        f = fopen("settings.json", "wb");
+        //TODO:
+        //write default_config
+    }
+
+    int size;
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *json_string = new char[size];
+
+    fread(json_string, size, 1, f);
+    fclose(f);
+
+    cJSON *json = cJSON_Parse(json_string);
+    cJSON *spheres = cJSON_GetObjectItemCaseSensitive(json, "spheres");
+    cJSON *sphere;
+    int n = 0;
+
+    if (!spheres)
+        goto cleanup;
+
+    sphere = spheres->child;
+
+    for (; sphere; ++n, sphere=sphere->next) {
+        assert(n < SPHERE_POOL_SIZE - 1);
+
+        cJSON *sphere_p = cJSON_GetObjectItemCaseSensitive(sphere, "position");
+        cJSON *sphere_r = cJSON_GetObjectItemCaseSensitive(sphere, "radius");
+        cJSON *sphere_mat = cJSON_GetObjectItemCaseSensitive(sphere, "material");
+        cJSON *sphere_ior = cJSON_GetObjectItemCaseSensitive(sphere, "ior");
+        cJSON *sphere_albedo = cJSON_GetObjectItemCaseSensitive(sphere, "albedo");
+
+        float x = cJSON_GetNumberValue(cJSON_GetArrayItem(sphere_p, 0));
+        float y = cJSON_GetNumberValue(cJSON_GetArrayItem(sphere_p, 1));
+        float z = cJSON_GetNumberValue(cJSON_GetArrayItem(sphere_p, 2));
+
+        sphere_pool[n].center = {x, y, z};
+        sphere_pool[n].r = cJSON_GetNumberValue(sphere_r);
+
+        cJSON_GetObjectItemCaseSensitive(sphere, "material");
+        const char *sphere_mat_s = cJSON_GetStringValue(sphere_mat);
+
+        if (!sphere_mat || std::strcmp(sphere_mat_s, "lambertian") == 0) {
+            int rgb = strtol(cJSON_GetStringValue(sphere_albedo), NULL, 16);
+            sphere_pool[n].mat = material::lambertian(color3::from_rgb(rgb));
+
+            continue;
+        }
+
+        if (std::strcmp(sphere_mat_s, "dielectric") == 0) {
+            assert(n < SPHERE_POOL_SIZE - 1);
+
+            cJSON *sphere_width = cJSON_GetObjectItemCaseSensitive(sphere, "width");
+
+            sphere_pool[n++].mat = material::refractive(1.f / cJSON_GetNumberValue(sphere_ior));
+
+            sphere_pool[n].center.e[0] = cJSON_GetNumberValue(cJSON_GetArrayItem(sphere_p, 0));
+            sphere_pool[n].center.e[1] = cJSON_GetNumberValue(cJSON_GetArrayItem(sphere_p, 1));
+            sphere_pool[n].center.e[2] = cJSON_GetNumberValue(cJSON_GetArrayItem(sphere_p, 2));
+            sphere_pool[n].r = cJSON_GetNumberValue(sphere_r) - cJSON_GetNumberValue(sphere_width);
+            sphere_pool[n].mat = material::refractive(cJSON_GetNumberValue(sphere_ior));
+
+            continue;
+        }
+
+        if (std::strcmp(sphere_mat_s, "reflective") == 0) {
+            sphere_pool[n].mat = material::reflective();
+
+            continue;
+        }
+    }
+
+    scene.spheres = sphere_pool;
+    scene.n_spheres = n;
+
+    cleanup:
+    cJSON_Delete(json);
+    delete[] json_string;
 }
 
 int main() {
-    point3 light_sources[] = {
-        point3{0, 10, 0}
-    };
-
-    sphere spheres[] = {
-        sphere{point3{0, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0xAA12D0))},
-        sphere{point3{-5, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0xAABBCC))},
-        sphere{point3{5, 0, 5}, 1.1, material::lambertian(color3::from_rgb(0x943118))},
-    };
-
-    scene_t state{};
-    state.light_sources = light_sources;
-    state.n_light_sources = sizeof(light_sources) / sizeof(light_sources[0]);
-    state.spheres = spheres;
-    state.n_spheres = sizeof(spheres) / sizeof(spheres[0]);
+    parse_config();
 
     Ctx ctx(v_width, v_height);
     rt_init(ctx);
 
     auto start = std::chrono::high_resolution_clock::now();
-    // draw scene 1
-    rt_draw_frame(state, ctx);
-    write_buf_to_file(ctx.buf, v_width, v_height);
-    ctx.clear();
 
-    // draw scene 2
-    // move light
-    state.light_sources[0].e[0] += 5;
-    rt_draw_frame(state, ctx);
-    write_buf_to_file(ctx.buf, v_width, v_height);
-    ctx.clear();
-
-    // draw scene 3
-    rt_multisample_draw(16);
+    rt_multisample_draw(scene, 16);
     write_buf_to_file(ctx.buf, v_width, v_height);
     ctx.clear();
 
