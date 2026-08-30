@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ostream>
-#include <pthread.h>
 #include <raylib.h>
 #include <chrono>
 #include <iostream>
@@ -15,6 +14,8 @@
 #include "ray_tracer.h"
 
 #include "cjson/cJSON.h"
+extern void set_avx_scene(const sphere *spheres, int n_spheres);
+extern void rt_draw_scene(Ctx &ctx);
 
 //object pool
 #define SPHERE_POOL_SIZE 30
@@ -27,6 +28,8 @@ void parse_config() {
         f = fopen("settings.json", "wb");
         //TODO:
         //write default_config
+        fclose(f);
+        return;
     }
 
     int size;
@@ -34,9 +37,15 @@ void parse_config() {
     size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *json_string = new char[size];
+    if (size < 0) {
+        fclose(f);
+        return;
+    }
 
-    fread(json_string, size, 1, f);
+    char *json_string = new char[size + 1];
+    std::memset(json_string, 0, size + 1);
+
+    fread(json_string, 1, size, f);
     fclose(f);
 
     cJSON *json = cJSON_Parse(json_string);
@@ -112,9 +121,11 @@ int main() {
     Ctx ctx(v_width, v_height);
     rt_init(ctx);
 
+    set_avx_scene(scene.spheres, scene.n_spheres);
+
     auto start = std::chrono::high_resolution_clock::now();
 
-    rt_multisample_draw(scene, 16);
+    rt_draw_scene(ctx);
     write_buf_to_file(ctx.buf, v_width, v_height);
     ctx.clear();
 

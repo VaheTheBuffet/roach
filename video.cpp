@@ -5,20 +5,27 @@
 #include "video.h"
 
 int v_width = WIDTH;
-
 int v_height = HEIGHT;
-
 float v_inv_ar = static_cast<float>(v_height) / v_width;
-
 float v_near = NEAR;
-
 float v_fov = FOV;
-
 float v_fov_tan = fast_tan(v_fov * PI / 360.f);
-
 float v_viewport_width = 2.f * v_near * v_fov_tan;
-
 float v_viewport_height = v_viewport_width * v_inv_ar;
+
+void v_set_w_h(int w, int h) {
+    v_width = w;
+    v_height = h;
+    v_inv_ar = static_cast<float>(v_height) / v_width;
+    v_viewport_height = v_viewport_width * v_inv_ar;
+}
+
+void v_set_fov(float f) {
+    v_fov = f;
+    v_fov_tan = fast_tan(v_fov * PI / 360.f);
+    v_viewport_width = 2.f * v_near * v_fov_tan;
+    v_viewport_height = v_viewport_width * v_inv_ar;
+}
 
 void write_buf_to_file(unsigned char *buf, int width, int height)
 {
