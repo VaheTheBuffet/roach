@@ -11,11 +11,10 @@
 #include "vec.h"
 #include "video.h"
 #include "ctx.h"
-#include "ray_tracer.h"
 
 #include "cjson/cJSON.h"
-extern void set_avx_scene(const sphere *spheres, int n_spheres);
-extern void rt_draw_scene(Ctx &ctx);
+
+#include "ray_tracer.h"
 
 //object pool
 #define SPHERE_POOL_SIZE 30
@@ -121,11 +120,10 @@ int main() {
     Ctx ctx(v_width, v_height);
     rt_init(ctx);
 
-    set_avx_scene(scene.spheres, scene.n_spheres);
-
     auto start = std::chrono::high_resolution_clock::now();
 
-    rt_draw_scene(ctx);
+    //rt_draw_frame(scene);
+    rt_multisample_draw(scene, 63);
     write_buf_to_file(ctx.buf, v_width, v_height);
     ctx.clear();
 

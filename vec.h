@@ -194,10 +194,11 @@ inline refract_result refract(const vec3 &incident, const vec3 &normal, float n1
 }
 
 // all components chosen unifornly
+#define randf_sym (2.f * (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX)) - 1.f)
 inline vec3 vec3::random() {
-    float x = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    float y = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    float z = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    float x = randf_sym;
+    float y = randf_sym;
+    float z = randf_sym;
 
     return vec3{x, y, z}.normalize();
 }
@@ -206,23 +207,24 @@ inline vec3 vec3::random() {
 // gives cosine weighted pdf, useful for some calculations
 // pde is cos(theta) / PI
 inline vec3 vec3::malley_random(const vec3& n) {
-  float r = std::sqrt(static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX));
-  float theta = 2 * PI * static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    float x = randf_sym;
+    float y = std::sqrtf(1.f - x * x) * randf_sym;
+    float z = std::sqrt(1.f - x * x - y * y);
 
-  // branchless orthonormal basis algorithm
-  // relies on reflections which are orthogonal transformations
-  float sign = std::copysign(1.0f, n.z());
-  float a = -1.0f / (sign + n.z());
-  float b = n.x() * n.y() * a;
-  vec3 b1 = vec3(1.0f + sign * n.x() * n.x() * a, sign * b, -sign * n.x());
-  vec3 b2 = vec3(b, sign + n.y() * n.y() * a, -n.y());
+    // branchless orthonormal basis algorithm
+    // To derive this formula, you parameterize the sphere by stereographic
+    // projection onto a plane, take the derivative to get a tangent vector field,
+    // then convert back to world coordinates to get c1, calculate cross product
+    // for c2
+    float sign = std::copysign(1.f, n.z());
+    float a = -1.0f / (sign + n.z());
+    float b = n.x() * n.y() * a;
+    vec3 v1 = vec3(1.0f + sign * n.x() * n.x() * a, sign * b, -sign * n.x());
+    vec3 v2 = vec3(b, sign + n.y() * n.y() * a, -n.y());
 
-  float x = r * std::cos(theta);
-  float y = r * std::sin(theta);
-  float z = std::sqrt(std::max(0.0f, 1.0f - x*x -y*y));
-
-  return x * b1 + y * b2 + z * n;
+    return x * v1 + y * v2 + z * n;
 }
+#undef RANDOM_SYM
 
 using point3 = vec3;
 using color3 = vec3;

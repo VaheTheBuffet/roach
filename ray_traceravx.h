@@ -11,15 +11,13 @@
 
 constexpr color3 background_color = color3::from_rgb(0x87CEEB);
 
-void rt_draw_scene(Ctx &ctx);
-
 struct scene_t {
-    sphere spheres[10] = {};
+    sphere spheres[10];
     int n_spheres;
-    point3 light_sources[10] = {};
+    point3 light_sources[10];
     int n_light_sources;
 };
 
-void draw_frame(const scene_t &state, Ctx &ctx);
+void rt_draw_frame(scene_t &scene);
 
 #endif

@@ -12,6 +12,9 @@
 
 #include "ray_tracer.h"
 
+#define STACK_SIZE 64
+#define MAX_DEPTH 4
+
 // per draw call
 struct settings_t {
     float color_factor;
@@ -44,7 +47,7 @@ struct state_t {
 };
 
 // ----------------------global----------------------------
-static settings_t settings{};
+static settings_t settings{.color_factor = 1.f};
 static Ctx *ctx;
 static float dx;
 static float dy;
@@ -323,6 +326,7 @@ void rt_draw_frame(const scene_t &scene) {
     std::cout << '\n';
     #endif
 }
+// so we have this problem that the
 
 void rt_multisample_draw(const scene_t &scene, int n) {
     settings.color_factor = 1.0 / n;

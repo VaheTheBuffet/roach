@@ -11,7 +11,8 @@ struct offset_table {
     offset_table(offset_table &ot) = default;
     offset_table(offset_table &&ot) = default;
 
-    // generates n points symmetrically around the rectangle of width dx / 2 height dy / 2
+    // generates n points symmetrically around the rectangle of 
+    // width dx / 2 and height dy / 2
     offset_table(unsigned int n, float dx, float dy) : table{} {
         if (n > 63) {
             throw std::runtime_error("you don't need that many samples");

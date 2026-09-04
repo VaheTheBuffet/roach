@@ -5,9 +5,6 @@
 #include "ctx.h"
 #include "sphere.h"
 
-#define STACK_SIZE 64
-#define MAX_DEPTH 4
-
 constexpr color3 background_color = color3::from_rgb(0x87CEEB);
 
 struct scene_t {
@@ -19,7 +16,7 @@ struct scene_t {
 
 void rt_init(Ctx &ctx);
 void rt_set_scene(const scene_t &s);
-void rt_multisample_draw(const scene_t &s, int n);
+void rt_multisample_draw(scene_t &s, int n);
 void rt_draw_frame(const scene_t &scene);
 
 #endif
