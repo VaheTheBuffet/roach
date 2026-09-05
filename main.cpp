@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ostream>
-#include <raylib.h>
 #include <chrono>
 #include <iostream>
 

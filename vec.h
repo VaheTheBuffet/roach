@@ -7,7 +7,6 @@
 #include <cstdlib>
 
 #include <cstdint>
-#include <raylib.h>
 
 inline bool almost_eq(const float &f1, const float &f2) {
     return std::abs(f1 - f2) < 0.0001;

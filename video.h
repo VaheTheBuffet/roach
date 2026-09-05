@@ -1,6 +1,10 @@
 #ifndef VIDEO_H
 #define VIDEO_H
 
+#ifndef PI
+#define PI 3.14159265358979323846f
+#endif
+
 #ifndef VIDEO_CPP
 // these are exported to other files
 

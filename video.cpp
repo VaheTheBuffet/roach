@@ -1,5 +1,3 @@
-#include <raylib.h>
-
 #include "util.h"
 #define VIDEO_CPP
 #include "video.h"
