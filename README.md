@@ -1,8 +1,8 @@
 # Roach
 
-A small and optimized software wavefront path tracer written in C++
-Utilizes AVX2 instruction set extensions to vectorize intersection and shading logic
-Generates ppm images of scenes
+A small and optimized software wavefront path tracer written in C++<br>
+Utilizes AVX2 instruction set extensions to vectorize intersection and shading logic<br>
+Generates ppm images of scenes<br>
 Reads settings.json for scene options, allowing for arbitrarily many spheres of various materials
 
 ## Build
