@@ -42,6 +42,7 @@ using f32 = float;
 #define ONE_EPI32 (_mm256_set1_epi32(1))
 #define NEG_ONE_EPI32 (_mm256_set1_epi32(-1))
 #define ZERO_EPI32 (_mm256_set1_epi32(0))
+#define PROG_EPI32(n) (_mm256_setr_epi32(n, n+1, n+2, n+3, n+4, n+5, n+6, n+7))
 
 #define assert_all(__M) (                        \
     assert(_mm256_extract_epi32(__M, 0) == -1 && \
@@ -228,20 +229,6 @@ static inline i32 _mm256_extractvar_epi32(__m256i m, i32 i) {
     return _mm256_cvtsi256_si32(v);
 }
 
-static inline void sync_sphere_tables();
-
-void rt_init(Ctx &c) 
-{
-    ctx = &c;
-}
-
-void set_scene(const scene_t &scene) 
-{
-    std::memcpy(spheres + 1, scene.spheres, scene.n_spheres * sizeof(sphere));
-    sphere_top = scene.n_spheres + 1;
-    sync_sphere_tables();
-}
-
 static inline void sync_sphere_tables() 
 {
     for (i32 s = 0; s < sphere_top; ++s) {
@@ -256,7 +243,18 @@ static inline void sync_sphere_tables()
         sphere_reflectance[s] = spheres[s].mat.reflectance;
     }
 }
-//---------------------global----------------------//
+
+#define V_RAND_MAX (_mm256_cvtepi32_ps(_mm256_set1_epi32(RAND_MAX)))
+static inline __m256 _mm256_rand_ps() {
+    static __m256i seed = PROG_EPI32(1);
+
+    seed = _mm256_xor_si256(seed, _mm256_slli_epi32(seed, 13));
+    seed = _mm256_xor_si256(seed, _mm256_srli_epi32(seed, 17));
+    seed = _mm256_xor_si256(seed, _mm256_slli_epi32(seed, 5));
+
+    return _mm256_div_ps(_mm256_cvtepi32_ps(seed), V_RAND_MAX);
+}
+#undef V_RAND_MAX
 
 // stop execution if ray is at target depth
 #if 0
@@ -519,30 +517,34 @@ static void lambertian_kernel()
         __m256 oy2 = _mm256_add_ps(oy, _mm256_mul_ps(EPS_PS, nrmy));
         __m256 oz2 = _mm256_add_ps(oz, _mm256_mul_ps(EPS_PS, nrmz));
 
-        i32 desired_idx = (165 + 1280 * (720 - 415));
-        for (i32 i = 0; i < N_LANES; ++i) {
-            if (_mm256_extractvar_epi32(idxv, i) == desired_idx) {
-                i32 br = 0;
-            }
-        }
+        //i32 desired_idx = (165 + 1280 * (720 - 415));
+        //for (i32 i = 0; i < N_LANES; ++i) {
+        //    if (_mm256_extractvar_epi32(idxv, i) == desired_idx) {
+        //        i32 br = 0;
+        //    }
+        //}
 
-        __m256i depth = path_meta_depth(meta);
-        __m256i hash = _mm256_add_epi32(
-            _mm256_mullo_epi32(idxv, _mm256_set1_epi32(1664525)),
-            _mm256_mullo_epi32(depth, _mm256_set1_epi32(1013904223)));
-        hash = _mm256_xor_si256(hash, _mm256_mullo_epi32(sphere_id, _mm256_set1_epi32(2246822519u)));
-        hash = _mm256_xor_si256(hash, _mm256_srli_epi32(hash, 15));
-        hash = _mm256_mullo_epi32(hash, _mm256_set1_epi32(3266489917u));
-        hash = _mm256_xor_si256(hash, _mm256_srli_epi32(hash, 16));
-        hash = _mm256_and_si256(hash, _mm256_set1_epi32(0x3F));
+        //__m256i depth = path_meta_depth(meta);
+        //__m256i hash = _mm256_add_epi32(
+        //    _mm256_mullo_epi32(idxv, _mm256_set1_epi32(1664525)),
+        //    _mm256_mullo_epi32(depth, _mm256_set1_epi32(1013904223)));
+        //hash = _mm256_xor_si256(hash, _mm256_mullo_epi32(sphere_id, _mm256_set1_epi32(2246822519u)));
+        //hash = _mm256_xor_si256(hash, _mm256_srli_epi32(hash, 15));
+        //hash = _mm256_mullo_epi32(hash, _mm256_set1_epi32(3266489917u));
+        //hash = _mm256_xor_si256(hash, _mm256_srli_epi32(hash, 16));
+        //hash = _mm256_and_si256(hash, _mm256_set1_epi32(0x3F));
 
-        __m256 rx = _mm256_i32gather_ps(table_x, hash, LANE_WIDTH);
-        __m256 ry = _mm256_i32gather_ps(table_y, hash, LANE_WIDTH);
-        __m256 rz = _mm256_i32gather_ps(table_z, hash, LANE_WIDTH);
+        //__m256 rx = _mm256_i32gather_ps(table_x, hash, LANE_WIDTH);
+        //__m256 ry = _mm256_i32gather_ps(table_y, hash, LANE_WIDTH);
+        //__m256 rz = _mm256_i32gather_ps(table_z, hash, LANE_WIDTH);
 
-        rx = _mm256_set_ps(rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f);
-        ry = _mm256_set_ps(rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f);
-        rz = _mm256_set_ps(rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f);
+        //rx = _mm256_set_ps(rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f);
+        //ry = _mm256_set_ps(rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f);
+        //rz = _mm256_set_ps(rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f);
+
+        __m256 rx = _mm256_rand_ps();
+        __m256 ry = _mm256_rand_ps();
+        __m256 rz = _mm256_rand_ps();
 
         // cosine weighted sampling of unit hemisphere
         // generates basis coordinates
@@ -763,12 +765,12 @@ static void refractive_kernel()
         norm_y = _mm256_mul_ps(orientation, norm_y);
         norm_z = _mm256_mul_ps(orientation, norm_z);
 
-        i32 desired_idx = (165 + 1280 * (720 - 415));
-        for (i32 i = 0; i < N_LANES; ++i) {
-            if (_mm256_extractvar_epi32(idxv, i) == desired_idx) {
-                i32 br = 0;
-            }
-        }
+        //i32 desired_idx = (165 + 1280 * (720 - 415));
+        //for (i32 i = 0; i < N_LANES; ++i) {
+        //    if (_mm256_extractvar_epi32(idxv, i) == desired_idx) {
+        //        i32 br = 0;
+        //    }
+        //}
 
         // make sure ray crosses sphere boundary to avoid self intersection
         ox = _mm256_sub_ps(ox, _mm256_mul_ps(EPS_PS, norm_x));
@@ -887,7 +889,7 @@ void store_colors() {
 
 void rt_draw_frame(const scene_t &scene)
 {
-    set_scene(scene);
+    rt_set_scene(scene);
 
     f32 dx = static_cast<f32>(v_viewport_width) / v_width;
     f32 dy = static_cast<f32>(v_viewport_height) / v_height;
@@ -1039,12 +1041,14 @@ void rt_draw_frame(const scene_t &scene)
                 s.meta[idx] = path_meta_sphere(s.meta[idx], static_cast<u32>(hit_sphere));
                 s.meta[idx] = path_meta_face(s.meta[idx], static_cast<u32>(face));
                 s.meta[idx] = path_meta_depth(s.meta[idx], path_meta_depth(s.meta[idx]) + 1u);
-                ibo[static_cast<i32>(spheres[hit_sphere].mat.ty)].idx[ibo[static_cast<i32>(spheres[hit_sphere].mat.ty)].n++] = idx;
+
+                i32 mat_idx = static_cast<i32>(spheres[hit_sphere].mat.ty);
+                ibo[mat_idx].idx[ibo[mat_idx].n++] = idx;
             }
         }
     }
 
-    for (i32 wavefront_stage = 0; wavefront_stage < 5; ++wavefront_stage) {
+    for (i32 wavefront_stage = 0; wavefront_stage < 10; ++wavefront_stage) {
         if (ibo_batch[0].n == 0 && ibo_batch[1].n == 0 && ibo_batch[2].n == 0) {
             break;
         }
@@ -1061,20 +1065,20 @@ void rt_draw_frame(const scene_t &scene)
     }
 
     for (i32 y = 0, y_t = v_height - 1; y < v_height; ++y, --y_t) {
-
         for (i32 x = 0; x < v_width; ++x) {
             const i32 idx = y * v_width + x;
 
-            if (path_meta_sphere(s.meta[idx]) < 0) {
-                // A path that misses contributes the environment; terminal paths
-                // use the same environment estimate rather than a flat albedo.
-            }
-
-            const f32 rr = std::max(0.0f, std::min(1.0f, s.color_r[idx] * background_color.x()));
-            const f32 gg = std::max(0.0f, std::min(1.0f, s.color_g[idx] * background_color.y()));
-            const f32 bb = std::max(0.0f, std::min(1.0f, s.color_b[idx] * background_color.z()));
+            const f32 rr = std::clamp(s.color_r[idx], 0.f, 1.f);
+            const f32 gg = std::clamp(s.color_g[idx], 0.f, 1.f);
+            const f32 bb = std::clamp(s.color_b[idx], 0.f, 1.f);
 
             color3 color{rr, gg, bb};
+            color *= background_color;
+
+            //gamma transform sort of
+            color.e[0] = std::sqrtf(color[0]);
+            color.e[1] = std::sqrtf(color[1]);
+            color.e[2] = std::sqrtf(color[2]);
 
             //multisample transform
             color /= static_cast<float>(n_samples);
@@ -1088,7 +1092,8 @@ void rt_draw_frame(const scene_t &scene)
     #endif
 }
 
-void rt_multisample_draw(scene_t &s, int n) {
+void rt_multisample_draw(const scene_t &s, int n) 
+{
     f32 dx = static_cast<float>(v_viewport_width) / static_cast<float>(v_width);
     f32 dy = static_cast<float>(v_viewport_height) / static_cast<float>(v_height);
 
@@ -1106,4 +1111,16 @@ void rt_multisample_draw(scene_t &s, int n) {
     off_x = 0.f;
     off_y = 0.f;
     n_samples = 1;
+}
+
+void rt_init(Ctx &c) 
+{
+    ctx = &c;
+}
+
+void rt_set_scene(const scene_t &scene) 
+{
+    std::memcpy(spheres + 1, scene.spheres, scene.n_spheres * sizeof(sphere));
+    sphere_top = scene.n_spheres + 1;
+    sync_sphere_tables();
 }

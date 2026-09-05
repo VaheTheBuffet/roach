@@ -20,6 +20,7 @@
 #define SPHERE_POOL_SIZE 30
 sphere sphere_pool[SPHERE_POOL_SIZE];
 scene_t scene;
+int n_samples;
 
 void parse_config() {
     FILE* f = std::fopen("settings.json", "r");
@@ -48,6 +49,10 @@ void parse_config() {
     fclose(f);
 
     cJSON *json = cJSON_Parse(json_string);
+
+    cJSON *samples = cJSON_GetObjectItemCaseSensitive(json, "samples");
+    n_samples = static_cast<int>(cJSON_GetNumberValue(samples));
+
     cJSON *spheres = cJSON_GetObjectItemCaseSensitive(json, "spheres");
     cJSON *sphere;
     int n = 0;
@@ -123,7 +128,7 @@ int main() {
     auto start = std::chrono::high_resolution_clock::now();
 
     //rt_draw_frame(scene);
-    rt_multisample_draw(scene, 63);
+    rt_multisample_draw(scene, n_samples);
     write_buf_to_file(ctx.buf, v_width, v_height);
     ctx.clear();
 
