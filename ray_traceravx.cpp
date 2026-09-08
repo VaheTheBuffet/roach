@@ -542,30 +542,30 @@ static void lambertian_kernel()
         //ry = _mm256_set_ps(rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f);
         //rz = _mm256_set_ps(rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f);
 
-        __m256 rx = _mm256_rand_ps();
-        __m256 ry = _mm256_rand_ps();
-        __m256 rz = _mm256_rand_ps();
+        __m256 rr = _mm256_sqrt_ps(_mm256_rand_ps());
+        __m256 rtheta = _mm256_mul_ps(_mm256_set1_ps(2.f*PI), _mm256_rand_ps());
+
+        __m256 u1 = _mm256_rand_ps();
+        __m256 u2 = _mm256_rand_ps();
 
         // cosine weighted sampling of unit hemisphere
         // generates basis coordinates
         // rx uniform on (-1, 1)
-        __m256 rx_norm = _mm256_sub_ps(_mm256_mul_ps(rx, TWO_PS), ONE_PS);
-
         // ry uniform on chord in hemishpere base
-        __m256 ry_norm = _mm256_sub_ps(ONE_PS, _mm256_mul_ps(rx_norm, rx_norm));
-        ry_norm = _mm256_sqrt_ps(ry_norm);
-        ry_norm = _mm256_mul_ps(ry_norm, _mm256_sub_ps(_mm256_mul_ps(ry, TWO_PS), ONE_PS));
+        // rz projected up to hemisphere
+        // pdf is cos(theta) / (4*abs(y))
+        __m256 rx = u1;
+        __m256 ry_max = _mm256_sub_ps(ONE_PS, _mm256_mul_ps(rx, rx));
+        ry_max = _mm256_sqrt_ps(ry_max);
+        __m256 ry = _mm256_mul_ps(ry_max, u2);
 
-        __m256 rz_norm = _mm256_mul_ps(rx_norm, rx_norm);
-        rz_norm = _mm256_add_ps(rz_norm, _mm256_mul_ps(ry_norm, ry_norm));
-        rz_norm = _mm256_sub_ps(ONE_PS, rz_norm);
-        rz_norm = _mm256_sqrt_ps(rz_norm);
+        __m256 rz = _mm256_mul_ps(rx, rx);
+        rz= _mm256_add_ps(rz, _mm256_mul_ps(ry, ry));
+        rz= _mm256_sub_ps(ONE_PS, rz);
+        rz= _mm256_sqrt_ps(rz);
 
-        __m256 len = _mm256_add_ps(
-            _mm256_mul_ps(rx_norm, rx_norm), 
-            _mm256_add_ps(
-                _mm256_mul_ps(ry_norm, ry_norm), 
-                _mm256_mul_ps(rz_norm, rz_norm)));
+        __m256 pdf_correction = _mm256_mul_ps(_mm256_set1_ps(4.f / PI), ry_max);
+        pdf_correction = _mm256_andnot_ps(NEG_ZERO_PS, pdf_correction);
 
         // branchless orthonormal basis generation
         __m256 dir_x;
@@ -589,24 +589,18 @@ static void lambertian_kernel()
             __m256 t2y = _mm256_add_ps(sign, _mm256_mul_ps(_mm256_mul_ps(nrmy, nrmy), a));
             __m256 t2z = _mm256_sub_ps(ZERO_PS, nrmy);
 
-            dir_x = _mm256_mul_ps(t1x, rx_norm);
-            dir_x = _mm256_add_ps(dir_x, _mm256_mul_ps(t2x, ry_norm));
-            dir_x = _mm256_add_ps(dir_x, _mm256_mul_ps(nrmx, rz_norm));
+            dir_x = _mm256_mul_ps(t1x, rx);
+            dir_x = _mm256_add_ps(dir_x, _mm256_mul_ps(t2x, ry));
+            dir_x = _mm256_add_ps(dir_x, _mm256_mul_ps(nrmx, rz));
 
-            dir_y = _mm256_mul_ps(t1y, rx_norm);
-            dir_y = _mm256_add_ps(dir_y, _mm256_mul_ps(t2y, ry_norm));
-            dir_y = _mm256_add_ps(dir_y, _mm256_mul_ps(nrmy, rz_norm));
+            dir_y = _mm256_mul_ps(t1y, rx);
+            dir_y = _mm256_add_ps(dir_y, _mm256_mul_ps(t2y, ry));
+            dir_y = _mm256_add_ps(dir_y, _mm256_mul_ps(nrmy, rz));
 
-            dir_z = _mm256_mul_ps(t1z, rx_norm);
-            dir_z = _mm256_add_ps(dir_z, _mm256_mul_ps(t2z, ry_norm));
-            dir_z = _mm256_add_ps(dir_z, _mm256_mul_ps(nrmz, rz_norm));
+            dir_z = _mm256_mul_ps(t1z, rx);
+            dir_z = _mm256_add_ps(dir_z, _mm256_mul_ps(t2z, ry));
+            dir_z = _mm256_add_ps(dir_z, _mm256_mul_ps(nrmz, rz));
         }
-
-        len = _mm256_add_ps(
-            _mm256_mul_ps(dir_x, dir_x),
-            _mm256_add_ps(
-                _mm256_mul_ps(dir_y, dir_y),
-                _mm256_mul_ps(dir_z, dir_z)));
 
         __m256 cr = _mm256_i32gather_ps(s.color_r, idxv, LANE_WIDTH);
         __m256 cg = _mm256_i32gather_ps(s.color_g, idxv, LANE_WIDTH);
@@ -615,6 +609,10 @@ static void lambertian_kernel()
         cr = _mm256_mul_ps(cr, ar);
         cg = _mm256_mul_ps(cg, ag);
         cb = _mm256_mul_ps(cb, ab);
+
+        cr = _mm256_mul_ps(cr, pdf_correction);
+        cg = _mm256_mul_ps(cg, pdf_correction);
+        cb = _mm256_mul_ps(cb, pdf_correction);
 
         pb.ray_orig_x = ox2;
         pb.ray_orig_y = oy2;
@@ -811,7 +809,7 @@ static void refractive_kernel()
         __m256 fresnel = _mm256_add_ps(r0, _mm256_mul_ps(_mm256_sub_ps(ONE_PS, r0), p5));
 
         __m256 choose_reflection = _mm256_or_ps(tir,
-            _mm256_cmp_ps(fresnel, _mm256_set_ps(rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f, rand_f), _CMP_GT_OQ));
+            _mm256_cmp_ps(fresnel, _mm256_andnot_ps(NEG_ZERO_PS, _mm256_rand_ps()), _CMP_GT_OQ));
 
         __m256 dir_x = _mm256_blendv_ps(refr_x, ref_x, choose_reflection);
         __m256 dir_y = _mm256_blendv_ps(refr_y, ref_y, choose_reflection);
@@ -881,10 +879,6 @@ static void dispatch_shading_kernels()
 
         ibo->n = 0;
     }
-}
-
-void store_colors() {
-
 }
 
 void rt_draw_frame(const scene_t &scene)

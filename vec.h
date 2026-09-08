@@ -7,6 +7,7 @@
 #include <cstdlib>
 
 #include <cstdint>
+#include "video.h"
 
 inline bool almost_eq(const float &f1, const float &f2) {
     return std::abs(f1 - f2) < 0.0001;
@@ -193,7 +194,8 @@ inline refract_result refract(const vec3 &incident, const vec3 &normal, float n1
 }
 
 // all components chosen unifornly
-#define randf_sym (2.f * (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX)) - 1.f)
+#define randf (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX))
+#define randf_sym (2.f * randf - 1.f)
 inline vec3 vec3::random() {
     float x = randf_sym;
     float y = randf_sym;
@@ -206,9 +208,13 @@ inline vec3 vec3::random() {
 // gives cosine weighted pdf, useful for some calculations
 // pde is cos(theta) / PI
 inline vec3 vec3::malley_random(const vec3& n) {
-    float x = randf_sym;
+    float r_2 = randf;
+    float r = std::sqrtf(r_2);
+    float theta = 2.f * PI * randf;
+
+    float x = std::cosf(theta) * r;
+    float z = std::sinf(theta) * r;
     float y = std::sqrtf(1.f - x * x) * randf_sym;
-    float z = std::sqrt(1.f - x * x - y * y);
 
     // branchless orthonormal basis algorithm
     // To derive this formula, you parameterize the sphere by stereographic
@@ -223,7 +229,8 @@ inline vec3 vec3::malley_random(const vec3& n) {
 
     return x * v1 + y * v2 + z * n;
 }
-#undef RANDOM_SYM
+#undef randf_sym
+#undef randf
 
 using point3 = vec3;
 using color3 = vec3;
