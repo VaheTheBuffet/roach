@@ -3,7 +3,6 @@
 
 #include <cstdint>
 #include <cstring>
-#include <sys/mman.h>
 
 #include "vec.h"
 
@@ -16,11 +15,10 @@ struct Ctx {
     Ctx(int width, int height, std::uint8_t *buf) : width(width), height(height), buf(buf), dyn{false} {}
     Ctx(int width, int height)
         : width{width}, height{height}, dyn{true},
-          buf{reinterpret_cast<std::uint8_t *>(
-              mmap(NULL, width * height * 3 + 32, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0))} {}
+          buf{new std::uint8_t[width * height * 3 + 32]} {}
     ~Ctx() {
         if (this->dyn) {
-            munmap(this->buf, this->width * this->height * 3);
+            delete[] this->buf;
         }
     }
 

@@ -27,7 +27,6 @@ using f32 = float;
 #define STACK_SIZE 64
 #define MAX_DEPTH 4
 #define N_LANES 8
-
 #define LANE_WIDTH (sizeof(f32))
 
 #define ZERO_PS (_mm256_setzero_ps())
